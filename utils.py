@@ -11,6 +11,7 @@ def logistic_function(x):
     return 1 / (1+np.e**(-x))
 
 
+# preference loss function for neural network
 class PrefLoss_Forrester(nn.Module):
     def __init__(self):
         super(PrefLoss_Forrester, self).__init__()
@@ -23,3 +24,4 @@ class PrefLoss_Forrester(nn.Module):
 
         loss = indic * sigmoid(diff)
         return torch.sum(loss)
+
