@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 import torch
+import matplotlib.pyplot as plt
 
 
 def forrester_function(x):
@@ -25,3 +26,20 @@ class PrefLoss_Forrester(nn.Module):
         loss = indic * sigmoid(diff)
         return torch.sum(loss)
 
+
+def plot_acc_trend(nb, gp_list, nn_list):
+    plt.plot(nb, gp_list, c="red", label="gp")
+    plt.scatter(nb, gp_list, c="red", marker='.', s=120)
+    plt.plot(nb, nn_list, c="blue", label="nn")
+    plt.scatter(nb, nn_list, c="blue", marker=',')
+    plt.legend()
+    plt.show()
+    plt.savefig("comp.png")
+
+
+def plot_function_shape(x, y, pred):
+    plt.plot(x, pred)
+    plt.plot(x, y, c="red", label="True")
+    plt.scatter(x[np.argmin(pred)], np.min(pred), marker="*", c="black")
+    plt.scatter(x[np.argmin(y)], np.min(y), marker="^", c="blue")
+    plt.show()

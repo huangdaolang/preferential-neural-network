@@ -2,9 +2,10 @@ from model import PrefNet_Forrester
 from dataset import pref_dataset
 import random
 import numpy as np
-from utils import forrester_function, logistic_function, PrefLoss_Forrester
+from utils import PrefLoss_Forrester
 import torch
 from torch.utils.data import DataLoader
+from GPro.preference import ProbitPreferenceGP
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -53,4 +54,20 @@ def train_nn(x, y, x_test, pairs, nb):
             acc += 1
     acc = acc / len(pairs)
 
+    return acc
+
+
+def train_gp(x, y, m, x_test, pairs, nb):
+    random.shuffle(m)
+    M = m[:nb]
+    gpr = ProbitPreferenceGP()
+    gpr.fit(x, M, f_prior=None)
+    gp_pred = gpr.predict(x_test)
+    acc = 0
+    for pair in pairs:
+        if y[pair[0]] > y[pair[1]] and gp_pred[pair[0]] < gp_pred[pair[1]]:
+            acc += 1
+        if y[pair[0]] < y[pair[1]] and gp_pred[pair[0]] > gp_pred[pair[1]]:
+            acc += 1
+    acc = acc / len(pairs)
     return acc
