@@ -1,8 +1,8 @@
 from model import PrefNet_Forrester
-from dataset import pref_dataset
+from dataset import pref_dataset, inducing_dataset
 import random
 import numpy as np
-from utils import PrefLoss_Forrester
+from utils import PrefLoss_Forrester, forrester_function, plot_function_shape
 import torch
 from torch.utils.data import DataLoader
 from GPro.preference import ProbitPreferenceGP
@@ -24,9 +24,19 @@ def train_nn(x, y, x_test, pairs, nb):
     criterion = PrefLoss_Forrester()
     optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.01)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
+
+    # using inducing points to calibrate the network
+    inducing_x = [x[a] for a in range(0, len(x), 10)]
+    inducing_y = [y[a] for a in range(0, len(x), 10)]
+    inducing_set = inducing_dataset(inducing_x, inducing_y)
+    inducing_train_loader = DataLoader(inducing_set, batch_size=10, shuffle=True, drop_last=False)
+    inducing_optim = torch.optim.Adam(pref_net.parameters(), lr=0.001)
+    inducing_criterion = torch.nn.MSELoss()
+
     for epoch in range(300):
         pref_net.train()
         train_loss = 0
+        # train with preference pairs
         for idx, data in enumerate(pref_train_loader):
             x1 = data['x1']
             x2 = data['x2']
@@ -43,9 +53,22 @@ def train_nn(x, y, x_test, pairs, nb):
             train_loss += loss.item()
         # print('[Epoch : %d] loss: %.3f' % (epoch + 1, train_loss / len(pref_train_loader)))
 
+        # train with inducing points
+        for idx, data in enumerate(inducing_train_loader):
+            inducing_x = data['x'].to(device)
+            inducing_y = data['y'].to(device)
+            inducing_optim.zero_grad()
+            pred, _ = pref_net(inducing_x, inducing_x)
+            pred = pred.flatten()
+            loss = inducing_criterion(inducing_y, pred)
+            loss.backward()
+            inducing_optim.step()
+
     out, _ = pref_net(x_test, x_test)
     out = out.detach().numpy()
-
+    pred_min_x = x_test[np.argmin(out)]
+    regret = min(y)-forrester_function(pred_min_x)
+    print("regret", regret)
     acc = 0
     for pair in pairs:
         if y[pair[0]] > y[pair[1]] and out[pair[0]] > out[pair[1]]:
@@ -53,7 +76,7 @@ def train_nn(x, y, x_test, pairs, nb):
         if y[pair[0]] < y[pair[1]] and out[pair[0]] < out[pair[1]]:
             acc += 1
     acc = acc / len(pairs)
-
+    plot_function_shape(x, y, out)
     return acc
 
 
@@ -70,4 +93,5 @@ def train_gp(x, y, m, x_test, pairs, nb):
         if y[pair[0]] < y[pair[1]] and gp_pred[pair[0]] > gp_pred[pair[1]]:
             acc += 1
     acc = acc / len(pairs)
+    plot_function_shape(x, y, gp_pred)
     return acc

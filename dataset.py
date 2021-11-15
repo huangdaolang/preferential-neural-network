@@ -15,3 +15,17 @@ class pref_dataset(Dataset):
 
     def __len__(self):
         return len(self.pref)
+
+
+class inducing_dataset(Dataset):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __getitem__(self, index):
+        entry = {"x": torch.tensor([self.x[index]]),
+                 "y": self.y[index]}
+        return entry
+
+    def __len__(self):
+        return len(self.y)
