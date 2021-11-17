@@ -8,8 +8,8 @@ class pref_dataset(Dataset):
         self.pref = pref
 
     def __getitem__(self, index):
-        entry = {"x1": torch.tensor([self.x_duels[index][0]]),
-                 "x2": torch.tensor([self.x_duels[index][1]]),
+        entry = {"x1": torch.tensor([self.x_duels[index][0]]).reshape(-1),
+                 "x2": torch.tensor([self.x_duels[index][1]]).reshape(-1),
                  "pref": self.pref[index]}
         return entry
 
@@ -29,3 +29,4 @@ class inducing_dataset(Dataset):
 
     def __len__(self):
         return len(self.y)
+

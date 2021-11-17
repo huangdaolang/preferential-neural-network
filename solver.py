@@ -1,4 +1,4 @@
-from model import PrefNet_Forrester
+from model import PrefNet
 from dataset import pref_dataset, inducing_dataset
 import random
 import numpy as np
@@ -6,34 +6,25 @@ from utils import PrefLoss_Forrester, forrester_function, plot_function_shape
 import torch
 from torch.utils.data import DataLoader
 from GPro.preference import ProbitPreferenceGP
+import copy
+import active_learning
+import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import torchbnn as bnn
+from torchhk import transform_model
 
 
-def train_nn(x, y, x_test, pairs, nb):
-    train_index = random.sample(range(0, len(pairs)), nb)
-    x_duels = np.array([[x[pairs[index][0]], x[pairs[index][1]]] for index in train_index]).reshape(-1, 2)
-    pref = []
-    for index in train_index:
-        pref.append(1) if y[pairs[index][0]] < y[pairs[index][1]] else pref.append(0)
-
+def train_nn(x_duels, pref, model=None):
     pref_set = pref_dataset(x_duels, pref)
-    pref_train_loader = DataLoader(pref_set, batch_size=50, shuffle=True, drop_last=False)
-
-    pref_net = PrefNet_Forrester().to(device)
+    pref_train_loader = DataLoader(pref_set, batch_size=10, shuffle=True, drop_last=False)
+    pref_net = PrefNet(x_duels[0][0].size).to(device) if model is None else model
     pref_net.double()
+
     criterion = PrefLoss_Forrester()
     optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.01)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
 
-    # using inducing points to calibrate the network
-    inducing_x = [x[a] for a in range(0, len(x), 10)]
-    inducing_y = [y[a] for a in range(0, len(x), 10)]
-    inducing_set = inducing_dataset(inducing_x, inducing_y)
-    inducing_train_loader = DataLoader(inducing_set, batch_size=10, shuffle=True, drop_last=False)
-    inducing_optim = torch.optim.Adam(pref_net.parameters(), lr=0.001)
-    inducing_criterion = torch.nn.MSELoss()
-
-    for epoch in range(300):
+    for epoch in range(100):
         pref_net.train()
         train_loss = 0
         # train with preference pairs
@@ -52,46 +43,111 @@ def train_nn(x, y, x_test, pairs, nb):
             scheduler.step()
             train_loss += loss.item()
         # print('[Epoch : %d] loss: %.3f' % (epoch + 1, train_loss / len(pref_train_loader)))
+    return pref_net
 
-        # train with inducing points
-        for idx, data in enumerate(inducing_train_loader):
-            inducing_x = data['x'].to(device)
-            inducing_y = data['y'].to(device)
-            inducing_optim.zero_grad()
-            pred, _ = pref_net(inducing_x, inducing_x)
-            pred = pred.flatten()
-            loss = inducing_criterion(inducing_y, pred)
-            loss.backward()
-            inducing_optim.step()
 
-    out, _ = pref_net(x_test, x_test)
-    out = out.detach().numpy()
-    pred_min_x = x_test[np.argmin(out)]
-    regret = min(y)-forrester_function(pred_min_x)
-    print("regret", regret)
+def compute_nn_acc(model, test):
+    model.eval()
+    x_test = test['x_duels']
+    pref_test = test['pref']
     acc = 0
-    for pair in pairs:
-        if y[pair[0]] > y[pair[1]] and out[pair[0]] > out[pair[1]]:
+    for i in range(len(x_test)):
+        x1 = torch.tensor(x_test[i][0])
+        x2 = torch.tensor(x_test[i][1])
+        pref = pref_test[i]
+        out1, out2 = model(x1, x2)
+        if pref == 1 and out1 > out2:
             acc += 1
-        if y[pair[0]] < y[pair[1]] and out[pair[0]] < out[pair[1]]:
+        if pref == 0 and out1 < out2:
             acc += 1
-    acc = acc / len(pairs)
-    plot_function_shape(x, y, out)
+    acc = acc / len(x_test)
+    # print("nn", acc)
     return acc
 
 
-def train_gp(x, y, m, x_test, pairs, nb):
-    random.shuffle(m)
-    M = m[:nb]
+def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
+    model = copy.deepcopy(model)
+    train = train0.copy()
+    query = query0.copy()
+
+    acc = np.zeros(n_acq + 1, )
+    acc[0] = compute_nn_acc(model, test)
+
+    al_function = active_learning.choose_criterion(al_criterion)
+
+    for i in range(n_acq):
+        query_index = al_function(model, train, query, test)
+        pref_q = query['pref'][query_index]
+
+        train['x_duels'] = np.vstack((train['x_duels'], query['x_duels'][[query_index], :]))
+        train['pref'] = np.hstack((train['pref'], pref_q))
+
+        query['x_duels'] = np.delete(query['x_duels'], query_index, axis=0)
+        query['pref'] = np.delete(query['pref'], query_index)
+
+        model = train_nn(train['x_duels'], train['pref'], model)
+
+        acc[i+1] = compute_nn_acc(model, test)
+
+    return acc
+
+
+def train_gp(x_duels, pref, model=None):
+    x_train = []
+    M_train = []
+    for i in range(len(x_duels)):
+        x_train.append(x_duels[i][0])
+        x_train.append(x_duels[i][1])
+        M_train.append([2 * i, 2 * i + 1]) if pref[i] == 1 else M_train.append([2 * i + 1, 2 * i])
+
     gpr = ProbitPreferenceGP()
-    gpr.fit(x, M, f_prior=None)
-    gp_pred = gpr.predict(x_test)
+    gpr.fit(x_train, M_train, f_prior=None)
+    return gpr
+
+
+def compute_gp_acc(model, test):
+    x_test = test['x_duels']
+    pref_test = test['pref']
     acc = 0
-    for pair in pairs:
-        if y[pair[0]] > y[pair[1]] and gp_pred[pair[0]] < gp_pred[pair[1]]:
+    for i in range(len(x_test)):
+        x1 = x_test[i][0]
+        x2 = x_test[i][1]
+        pref = pref_test[i]
+        out1 = model.predict(x1.reshape(1, -1))
+        out2 = model.predict(x2.reshape(1, -1))
+        if pref == 1 and out1 > out2:
             acc += 1
-        if y[pair[0]] < y[pair[1]] and gp_pred[pair[0]] > gp_pred[pair[1]]:
+        if pref == 0 and out1 < out2:
             acc += 1
-    acc = acc / len(pairs)
-    plot_function_shape(x, y, gp_pred)
+    acc = acc / len(x_test)
+    # print("gp", acc)
     return acc
+
+
+def active_train_gp(model, train0, query0, test, n_acq, al_criterion):
+    train = train0.copy()
+    query = query0.copy()
+    model = copy.deepcopy(model)
+    acc = np.zeros(n_acq + 1, )
+    acc[0] = compute_gp_acc(model, test)
+
+    al_function = active_learning.choose_criterion(al_criterion)
+
+    for i in range(n_acq):
+        query_index = al_function(model, train, query, test)
+        pref_q = query['pref'][query_index]
+
+        train['x_duels'] = np.vstack((train['x_duels'], query['x_duels'][[query_index], :]))
+        train['pref'] = np.hstack((train['pref'], pref_q))
+
+        query['x_duels'] = np.delete(query['x_duels'], query_index, axis=0)
+        query['pref'] = np.delete(query['pref'], query_index)
+
+        model = train_gp(train['x_duels'], train['pref'], model)
+
+        acc[i+1] = compute_gp_acc(model, test)
+
+    return acc
+
+
+

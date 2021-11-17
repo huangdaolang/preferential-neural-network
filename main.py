@@ -1,5 +1,5 @@
 import config
-from utils import forrester_function, plot_acc_trend, plot_function_shape
+from utils import *
 import solver
 import numpy as np
 import torch
@@ -7,64 +7,35 @@ import itertools
 import random
 import time
 
-# generate data for nn
-x = np.linspace(0, 1, config.N_points)
-nn_x_test = torch.from_numpy(x).reshape(-1, 1)
-y = forrester_function(x)
-pairs = list(itertools.permutations(range(len(x)), 2))
-random.shuffle(pairs)
 
-# generate data for gp
-gp_x = x.reshape(-1, 1)
-gp_x_test = x.reshape(-1, 1)
-gp_m = []
-for a in range(len(x)):
-    for b in range(len(x)):
-        if y[a] > y[b]:
-            gp_m.append([a, b])
-        elif y[a] < y[b]:
-            gp_m.append([b, a])
+def main(train_pair, query_pair, test_pair, n_acq):
+    # get data
+    train, query, test = get_boston_data(train_pair, query_pair, test_pair)
 
+    acc_nn = np.zeros((10, 2, n_acq + 1))
+    for i in range(10):
+        model = solver.train_nn(train['x_duels'], train['pref'], model=None)
+        acc_nn[i, 0, :] = solver.active_train_nn(model, train, query, test, n_acq, "random")
+        acc_nn[i, 1, :] = solver.active_train_nn(model, train, query, test, n_acq, "uncertainty_nn")
 
-nn_acc_list = []
-nn_time_list = []
-gp_acc_list = []
-gp_time_list = []
-nb_list = []
-for nb in range(config.N_train_pair[0], config.N_train_pair[1], 20):
-    nb_list.append(nb)
+    acc_nn_avg = np.mean(acc_nn, axis=0)
+    print(acc_nn_avg)
 
-    # train nn
-    nn_acc_repeat = []
-    time1 = time.time()
-    for _ in range(1):
-        nn_acc = solver.train_nn(x, y, nn_x_test, pairs, nb)
-        if nn_acc > 0.75:
-            nn_acc_repeat.append(nn_acc)
-    time2 = time.time()
-    nn_time = (time2 - time1) / 10
-    nn_acc_avg = np.mean(nn_acc_repeat)
-    nn_acc_list.append(nn_acc_avg)
-    nn_time_list.append(nn_time)
-    # print("nn accuracy under {} points: {}, time takes {}".format(nb, nn_acc_avg, nn_time))
+    acc_gp = np.zeros((10, 2, n_acq + 1))
+    for i in range(10):
+        gp_model = solver.train_gp(train['x_duels'], train['pref'], model=None)
+        acc_gp[i, 0, :] = solver.active_train_gp(gp_model, train, query, test, n_acq, "random")
+        acc_gp[i, 1, :] = solver.active_train_gp(gp_model, train, query, test, n_acq, "uncertainty_gp")
+    acc_gp_avg = np.mean(acc_gp, axis=0)
+    print(acc_gp_avg)
 
-    # train gp
-    # gp_acc_repeat = []
-    # time1 = time.time()
-    # for _ in range(1):
-    #     gp_acc = solver.train_gp(gp_x, y, gp_m, gp_x_test, pairs, nb)
-    #     gp_acc_repeat.append(gp_acc)
-    # time2 = time.time()
-    # gp_time = (time2 - time1) / 10
-    # gp_acc_avg = np.mean(gp_acc_repeat)
-    # gp_acc_list.append(gp_acc_avg)
-    # gp_time_list.append(gp_time)
-    # print("gp accuracy under {} points: {}, time takes {}".format(nb, gp_acc_avg, gp_time))
+    plot_acc_trend(acc_nn_avg, acc_gp_avg, "accuracy comparison.png")
 
 
-# plot_acc_trend(nb_list, gp_acc_list, nn_acc_list, "accuracy comparison.png")
-# plot_acc_trend(nb_list, gp_time_list, nn_time_list, "time comparison.png")
-
-
-
+if __name__ == "__main__":
+    n_train_pairs = config.N_train_pair
+    n_query_pairs = config.N_query_pair
+    n_test_pairs = config.N_test_pair
+    n_acquire = config.N_acquire
+    main(n_train_pairs, n_query_pairs, n_test_pairs, n_acquire)
 
