@@ -32,7 +32,7 @@ def get_boston_data(n_train, n_query, n_test):
     boston['MEDV'] = boston_dataset.target
     boston = (boston - boston.mean()) / boston.std()
     pairs = list(itertools.combinations(range(len(boston)), 2))
-    random.seed(2021)
+    random.seed(config.seed)
     random.shuffle(pairs)
 
     y = boston["MEDV"].to_numpy()
@@ -92,16 +92,40 @@ class PrefLoss_Forrester(nn.Module):
         return torch.sum(loss)
 
 
-def plot_acc_trend(nn_list, gp_list, fig_name):
+def plot_acc_trend(nn_list, acc_nn_std, gp_list, acc_gp_std, fig_name):
     nb = [i for i in range(len(nn_list[0]))]
-    plt.plot(nb, gp_list[0], c="red", label="gp_random")
-    plt.scatter(nb, gp_list[0], c="red", marker='.', s=120)
-    plt.plot(nb, gp_list[1], c="green", label="gp_uncertainty")
+    plt.plot(nb, gp_list[0], c="orange", label="gp_random")
+    plt.scatter(nb, gp_list[0], c="orange", marker='.', s=120)
+    plt.plot(nb, gp_list[1], c="green", label="gp_US")
     plt.scatter(nb, gp_list[1], c="green", marker='.', s=120)
+    plt.plot(nb, gp_list[2], c="yellow", label="gp_BALD")
+    plt.scatter(nb, gp_list[2], c="yellow", marker='.', s=120)
+
     plt.plot(nb, nn_list[0], c="blue", label="nn_random")
     plt.scatter(nb, nn_list[0], c="blue", marker=',')
-    plt.plot(nb, nn_list[1], c="black", label="nn_uncertainty")
+    plt.plot(nb, nn_list[1], c="black", label="nn_US")
     plt.scatter(nb, nn_list[1], c="black", marker=',')
+    plt.plot(nb, nn_list[2], c="red", label="BALD")
+    plt.scatter(nb, nn_list[2], c="red", marker=',')
+    plt.gca().fill_between(nb,
+                           nn_list[0]-acc_nn_std[0]/10,
+                           nn_list[0]+acc_nn_std[0]/10, color="blue", alpha=0.2)
+    plt.gca().fill_between(nb,
+                           nn_list[1]-acc_nn_std[1]/10,
+                           nn_list[1]+acc_nn_std[1]/10, color="grey", alpha=0.2)
+    plt.gca().fill_between(nb,
+                           nn_list[2] - acc_nn_std[2] / 10,
+                           nn_list[2] + acc_nn_std[2] / 10, color="red", alpha=0.2)
+
+    plt.gca().fill_between(nb,
+                           gp_list[0] - acc_gp_std[0] / 10,
+                           gp_list[0] + acc_gp_std[0] / 10, color="orange", alpha=0.2)
+    plt.gca().fill_between(nb,
+                           gp_list[1] - acc_gp_std[1] / 10,
+                           gp_list[1] + acc_gp_std[1] / 10, color="green", alpha=0.2)
+    plt.gca().fill_between(nb,
+                           gp_list[2] - acc_gp_std[2] / 10,
+                           gp_list[2] + acc_gp_std[2] / 10, color="yellow", alpha=0.2)
     plt.legend()
     plt.savefig(fig_name)
     plt.close()

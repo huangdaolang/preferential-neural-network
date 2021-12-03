@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Preference Neural Network.iml" filepath="$PROJECT_DIR$/.idea/Preference Neural Network.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/PNN Active Learning.iml" filepath="$PROJECT_DIR$/.idea/PNN Active Learning.iml" />
     </modules>
   </component>
 </project>

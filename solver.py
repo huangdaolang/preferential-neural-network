@@ -2,7 +2,7 @@ from model import PrefNet
 from dataset import pref_dataset, inducing_dataset
 import random
 import numpy as np
-from utils import PrefLoss_Forrester, forrester_function, plot_function_shape
+from utils import PrefLoss_Forrester, forrester_function, plot_function_shape, logistic_function
 import torch
 from torch.utils.data import DataLoader
 from GPro.preference import ProbitPreferenceGP
@@ -10,8 +10,8 @@ import copy
 import active_learning
 import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-import torchbnn as bnn
-from torchhk import transform_model
+# import torchbnn as bnn
+# from torchhk import transform_model
 
 
 def train_nn(x_duels, pref, model=None):
@@ -21,7 +21,8 @@ def train_nn(x_duels, pref, model=None):
     pref_net.double()
 
     criterion = PrefLoss_Forrester()
-    optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.01)
+    # criterion = torch.nn.BCELoss()
+    optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
 
     for epoch in range(100):
@@ -31,14 +32,17 @@ def train_nn(x_duels, pref, model=None):
         for idx, data in enumerate(pref_train_loader):
             x1 = data['x1']
             x2 = data['x2']
-
             # pref = (torch.rand(size=[len(data['pref'])]) < data['pref']) * 1  # random process
-            pref = data['pref']
+            pref = data['pref'].double()
             x1, x2, pref = x1.to(device), x2.to(device), pref.to(device)
             optimizer.zero_grad()
             output1, output2 = pref_net(x1, x2)
+
+            # output = logistic_function(output1-output2).flatten()
+            # loss = criterion(output, pref)
             loss = criterion(output1, output2, pref)
             loss.backward()
+
             optimizer.step()
             scheduler.step()
             train_loss += loss.item()
