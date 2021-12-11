@@ -5,3 +5,5 @@ N_acquire = 30
 
 N_simulation = 10
 seed = 2021
+
+dataset = "boston"

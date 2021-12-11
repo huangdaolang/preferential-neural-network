@@ -7,10 +7,62 @@ import pandas as pd
 import itertools
 import random
 import config
+from numpy.random import default_rng
+
+
+def get_data(dataset, n_train, n_query, n_test):
+    if dataset == "boston":
+        x, y, pairs = get_boston_data()
+    elif dataset == "styblinski_tang":
+        x, y, pairs = get_styblinski_tang_data()
+    elif dataset == "six_hump_camel":
+        x, y, pairs = get_six_hump_camel_data()
+    elif dataset == "forrester":
+        x, y, pairs = get_forrester_data()
+    else:
+        raise NotImplementedError
+
+    train_pairs = pairs[:n_train]
+    query_pairs = pairs[n_train:n_train + n_query]
+    test_pairs = pairs[n_train + n_query: n_train + n_query + n_test]
+
+    x_duels_train = np.array(
+        [[x[train_pairs[index][0]], x[train_pairs[index][1]]] for index in range(len(train_pairs))])
+    pref_train = []
+    for index in range(len(train_pairs)):
+        pref_train.append(1) if y[train_pairs[index][0]] < y[train_pairs[index][1]] else pref_train.append(0)
+
+    x_duels_query = np.array(
+        [[x[query_pairs[index][0]], x[query_pairs[index][1]]] for index in range(len(query_pairs))])
+    pref_query = []
+    for index in range(len(query_pairs)):
+        pref_query.append(1) if y[query_pairs[index][0]] < y[query_pairs[index][1]] else pref_query.append(0)
+
+    x_duels_test = np.array([[x[test_pairs[index][0]], x[test_pairs[index][1]]] for index in range(len(test_pairs))])
+    pref_test = []
+    for index in range(len(test_pairs)):
+        pref_test.append(1) if y[test_pairs[index][0]] < y[test_pairs[index][1]] else pref_test.append(0)
+
+    train = {'x_duels': x_duels_train, 'pref': pref_train}
+    query = {'x_duels': x_duels_query, 'pref': pref_query}
+    test = {'x_duels': x_duels_test, 'pref': pref_test}
+
+    return train, query, test
 
 
 def forrester_function(x):
     return (6*x-2)**2 * np.sin(12*x-4)
+
+
+def styblinski_tang_function(x):
+    y = 0.5 * np.sum(x**4 - 16*x**2 + 5*x, axis=1)
+
+    return y
+
+
+def six_hump_camel_function(x1, x2):
+    y = (4 - 2.1 * (x1 ** 2) + (x1 ** 4) / 3) * (x1 ** 2) + x1 * x2 + (-4 + 4 * (x2 ** 2)) * (x2 ** 2)
+    return y
 
 
 def logistic_function(x):
@@ -18,15 +70,39 @@ def logistic_function(x):
 
 
 def get_forrester_data():
-    x = np.linspace(0, 1, 100)
-    nn_x_test = torch.from_numpy(x).reshape(-1, 1)
+    x = np.linspace(0, 1, 100).reshape(-1, 1)
     y = forrester_function(x)
     pairs = list(itertools.permutations(range(len(x)), 2))
+    random.seed(config.seed)
     random.shuffle(pairs)
-    return x, y, nn_x_test, pairs
+    return x, y, pairs
 
 
-def get_boston_data(n_train, n_query, n_test):
+def get_six_hump_camel_data():
+    rng = default_rng()
+    x1 = rng.uniform(low=-3, high=3, size=1000)
+    x2 = rng.uniform(low=-2, high=2, size=1000)
+    x = np.hstack([x1.reshape(-1, 1), x2.reshape(-1, 1)])
+    y = six_hump_camel_function(x1, x2)
+    pairs = list(itertools.combinations(range(len(y)), 2))
+    random.seed(config.seed)
+    random.shuffle(pairs)
+
+    return x, y, pairs
+
+
+def get_styblinski_tang_data():
+    rng = default_rng()
+    x = rng.uniform(low=-5, high=5, size=(1000, 5))
+    y = styblinski_tang_function(x)
+    pairs = list(itertools.combinations(range(len(y)), 2))
+    random.seed(config.seed)
+    random.shuffle(pairs)
+
+    return x, y, pairs
+
+
+def get_boston_data():
     boston_dataset = load_boston()
     boston = pd.DataFrame(boston_dataset.data, columns=boston_dataset.feature_names)
     boston['MEDV'] = boston_dataset.target
@@ -38,30 +114,7 @@ def get_boston_data(n_train, n_query, n_test):
     y = boston["MEDV"].to_numpy()
     x = boston.drop(columns=["MEDV"]).to_numpy()
 
-    train_pairs = pairs[:n_train]
-    query_pairs = pairs[n_train:n_train+n_query]
-    test_pairs = pairs[n_train+n_query: n_train+n_query+n_test]
-
-    x_duels_train = np.array([[x[train_pairs[index][0]], x[train_pairs[index][1]]] for index in range(len(train_pairs))])
-    pref_train = []
-    for index in range(len(train_pairs)):
-        pref_train.append(1) if y[train_pairs[index][0]] > y[train_pairs[index][1]] else pref_train.append(0)
-
-    x_duels_query = np.array([[x[query_pairs[index][0]], x[query_pairs[index][1]]] for index in range(len(query_pairs))])
-    pref_query = []
-    for index in range(len(query_pairs)):
-        pref_query.append(1) if y[query_pairs[index][0]] > y[query_pairs[index][1]] else pref_query.append(0)
-
-    x_duels_test = np.array([[x[test_pairs[index][0]], x[test_pairs[index][1]]] for index in range(len(test_pairs))])
-    pref_test = []
-    for index in range(len(test_pairs)):
-        pref_test.append(1) if y[test_pairs[index][0]] > y[test_pairs[index][1]] else pref_test.append(0)
-
-    train = {'x_duels': x_duels_train, 'pref': pref_train}
-    query = {'x_duels': x_duels_query, 'pref': pref_query}
-    test = {'x_duels': x_duels_test, 'pref': pref_test}
-
-    return train, query, test
+    return x, y, pairs
 
 
 def get_gp_input(x, y, dim):
@@ -83,7 +136,7 @@ class PrefLoss_Forrester(nn.Module):
         super(PrefLoss_Forrester, self).__init__()
 
     def forward(self, x1, x2, pref):
-        diff = x1 - x2
+        diff = x2 - x1
         diff = diff.squeeze(1)
         indic = torch.pow(-1, pref)
         sigmoid = nn.Sigmoid()
@@ -105,7 +158,7 @@ def plot_acc_trend(nn_list, acc_nn_std, gp_list, acc_gp_std, fig_name):
     plt.scatter(nb, nn_list[0], c="blue", marker=',')
     plt.plot(nb, nn_list[1], c="black", label="nn_US")
     plt.scatter(nb, nn_list[1], c="black", marker=',')
-    plt.plot(nb, nn_list[2], c="red", label="BALD")
+    plt.plot(nb, nn_list[2], c="red", label="nn_BALD")
     plt.scatter(nb, nn_list[2], c="red", marker=',')
     plt.gca().fill_between(nb,
                            nn_list[0]-acc_nn_std[0]/10,
@@ -127,9 +180,9 @@ def plot_acc_trend(nn_list, acc_nn_std, gp_list, acc_gp_std, fig_name):
                            gp_list[2] - acc_gp_std[2] / 10,
                            gp_list[2] + acc_gp_std[2] / 10, color="yellow", alpha=0.2)
     plt.legend()
-    plt.savefig(fig_name)
-    plt.close()
-    # plt.show()
+    # plt.savefig(fig_name)
+    # plt.close()
+    plt.show()
 
 
 def plot_function_shape(x, y, pred):
