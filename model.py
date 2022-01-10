@@ -6,9 +6,9 @@ import torchbnn as bnn
 class PrefNet(nn.Module):
     def __init__(self, n_input):
         super(PrefNet, self).__init__()
-        self.fc1 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=n_input, out_features=100)
-        self.fc2 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=100, out_features=30)
-        self.fc3 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=30, out_features=1)
+        self.fc1 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=n_input, out_features=10)
+        self.fc2 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=10, out_features=10)
+        self.fc3 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=10, out_features=1)
 
     def forward_once(self, x):
         x = self.fc1(x)

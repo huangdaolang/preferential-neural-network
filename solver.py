@@ -1,8 +1,8 @@
 from model import PrefNet
-from dataset import pref_dataset, inducing_dataset
+from dataset import pref_dataset
 import random
 import numpy as np
-from utils import PrefLoss_Forrester, forrester_function, plot_function_shape, logistic_function
+from utils import *
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -10,9 +10,8 @@ from GPro.preference import ProbitPreferenceGP
 import copy
 import active_learning
 import time
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import torchbnn as bnn
-# from torchhk import transform_model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def train_nn(x_duels, pref, model=None):
@@ -20,14 +19,13 @@ def train_nn(x_duels, pref, model=None):
     pref_train_loader = DataLoader(pref_set, batch_size=10, shuffle=True, drop_last=False)
     pref_net = PrefNet(x_duels[0][0].size).to(device) if model is None else model
     pref_net.double()
-
     # criterion = PrefLoss_Forrester()
     criterion = torch.nn.NLLLoss()
     kl_loss = bnn.BKLLoss(reduction='mean', last_layer_only=False)
     optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
 
-    for epoch in range(100):
+    for epoch in range(50):
         pref_net.train()
         train_loss = 0
         # train with preference pairs
@@ -61,7 +59,7 @@ def compute_nn_acc(model, test):
     x_test = test['x_duels']
     pref_test = test['pref']
     acc = 0
-    n_mc = 3
+    n_mc = 10
     for i in range(len(x_test)):
         x1 = torch.tensor(x_test[i][0])
         x2 = torch.tensor(x_test[i][1])
