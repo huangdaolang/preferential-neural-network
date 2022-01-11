@@ -29,23 +29,71 @@ def random_sampling(model, train, query, test):
 def nn_least_confident(model, train, query, test):
     model.eval()
     x_query = query['x_duels']
-    confidence = torch.zeros(len(query['pref']))
+    # confidence = torch.zeros(len(query['pref']))
+    #
+    # for i in range(len(x_query)):
+    #     x1 = torch.tensor(x_query[i][0])
+    #     x2 = torch.tensor(x_query[i][1])
+    #     out = torch.zeros((n_mc, 2))
+    #     for n in range(n_mc):
+    #         out[n, 0], out[n, 1] = model(x1, x2)
+    #     pred = torch.mean(out, dim=0)
+    #     out1 = pred[0]
+    #     out2 = pred[1]
+    #     # out1, out2 = model(x1, x2)
+    #     diff = torch.abs(out1 - out2)
+    #     v = logistic_function(diff)
+    #     confidence[i] = v
     n_mc = 5
-    for i in range(len(x_query)):
-        x1 = torch.tensor(x_query[i][0])
-        x2 = torch.tensor(x_query[i][1])
-        out = torch.zeros((n_mc, 2))
-        for n in range(n_mc):
-            out[n, 0], out[n, 1] = model(x1, x2)
-        pred = torch.mean(out, dim=0)
-        out1 = pred[0]
-        out2 = pred[1]
-        # out1, out2 = model(x1, x2)
-        diff = torch.abs(out1 - out2)
+    confidence = torch.zeros((n_mc, len(query['pref'])))
+    x1 = torch.tensor(x_query[:, 0, :])
+    x2 = torch.tensor(x_query[:, 1, :])
+    for t in range(n_mc):
+        out1, out2 = model(x1, x2)
+        diff = torch.abs(out1 - out2).reshape(-1)
         v = logistic_function(diff)
-        confidence[i] = v
-
+        confidence[t, :] = v
+    confidence = torch.mean(confidence, dim=0)
     return torch.argmin(confidence)
+
+
+def nn_bald(model, train, query, test):
+    x_query = query['x_duels']
+    dropout_iterations = 10
+    x1 = torch.tensor(x_query[:, 0, :])
+    x2 = torch.tensor(x_query[:, 1, :])
+
+    score_all = np.zeros(shape=(x1.shape[0], 2))
+    all_entropy_dropout = np.zeros(shape=x1.shape[0])
+    for t in range(dropout_iterations):
+        out1, out2 = model(x1, x2)
+        diff = out2 - out1
+        prob_1 = logistic_function(diff)
+        prob_0 = 1 - prob_1
+
+        score = torch.cat((prob_0, prob_1), 1)
+        score = score.detach().numpy()
+
+        score_all += score
+        score_log = np.log2(score)
+
+        entropy_compute = - np.multiply(score, score_log)
+        entropy_per_dropout = np.sum(entropy_compute, axis=1)
+
+        all_entropy_dropout += entropy_per_dropout
+    # score_all += np.finfo(float).eps
+    Avg_Pi = np.divide(score_all, dropout_iterations)
+    Log_Avg_Pi = np.log2(Avg_Pi)
+    Entropy_Avg_Pi = - np.multiply(Avg_Pi, Log_Avg_Pi)
+    Entropy_Average_Pi = np.sum(Entropy_Avg_Pi, axis=1)
+
+    G_X = Entropy_Average_Pi
+
+    F_X = np.divide(all_entropy_dropout, dropout_iterations)
+
+    U_X = (G_X - F_X).flatten()
+
+    return np.argmax(U_X)
 
 
 def nn_maximize_entropy(model, train, query, test):
@@ -62,44 +110,6 @@ def nn_maximize_entropy(model, train, query, test):
         entropy[i] = -(diff_0 * torch.log2(diff_0) + diff_1 * torch.log2(diff_1))
 
     return torch.argmax(entropy)
-
-
-def nn_bald(model, train, query, test):
-    x_query = query['x_duels']
-    dropout_iterations = 20  # forward time, 100 in Gal's paper
-    x1 = torch.tensor(x_query[:, 0, :])
-    x2 = torch.tensor(x_query[:, 1, :])
-
-    score_all = np.zeros(shape=(x1.shape[0], 2))
-    all_entropy_dropout = np.zeros(shape=x1.shape[0])
-    for t in range(dropout_iterations):
-        out1, out2 = model(x1, x2)
-        diff = out2 - out1
-        prob_1 = logistic_function(diff)
-        prob_0 = 1 - prob_1
-        score = torch.cat((prob_0, prob_1), 1)
-        score = score.detach().numpy()
-        # print(score)
-        score_all += score
-        score_log = np.log2(score)
-
-        entropy_compute = - np.multiply(score, score_log)
-        entropy_per_dropout = np.sum(entropy_compute, axis=1)
-
-        all_entropy_dropout += entropy_per_dropout
-    score_all += np.finfo(float).eps
-    Avg_Pi = np.divide(score_all, dropout_iterations)
-    Log_Avg_Pi = np.log2(Avg_Pi)
-    Entropy_Avg_Pi = - np.multiply(Avg_Pi, Log_Avg_Pi)
-    Entropy_Average_Pi = np.sum(Entropy_Avg_Pi, axis=1)
-
-    G_X = Entropy_Average_Pi
-
-    F_X = np.divide(all_entropy_dropout, dropout_iterations)
-
-    U_X = (G_X + F_X).flatten()
-
-    return np.nanargmax(U_X)
 
 
 def gp_least_confident(model, train, query, test):

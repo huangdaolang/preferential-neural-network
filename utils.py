@@ -10,9 +10,9 @@ import config
 from numpy.random import default_rng
 
 
-def get_data(dataset, n_train, n_query, n_test):
+def get_data(dataset, n_train, n_query, n_test, seed):
     if dataset == "boston":
-        x, y, pairs = get_boston_data()
+        x, y, pairs = get_boston_data(seed)
     elif dataset == "styblinski_tang":
         x, y, pairs = get_styblinski_tang_data()
     elif dataset == "six_hump_camel":
@@ -178,13 +178,13 @@ def get_styblinski_tang_data():
     return x, y, pairs
 
 
-def get_boston_data():
+def get_boston_data(seed):
     boston_dataset = load_boston()
     boston = pd.DataFrame(boston_dataset.data, columns=boston_dataset.feature_names)
     boston['MEDV'] = boston_dataset.target
     boston = (boston - boston.mean()) / boston.std()
     pairs = list(itertools.combinations(range(len(boston)), 2))
-    # random.seed(config.seed)
+    random.seed(seed)
     random.shuffle(pairs)
 
     y = boston["MEDV"].to_numpy()

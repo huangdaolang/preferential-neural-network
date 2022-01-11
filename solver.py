@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train_nn(x_duels, pref, model=None):
     pref_set = pref_dataset(x_duels, pref)
-    pref_train_loader = DataLoader(pref_set, batch_size=10, shuffle=True, drop_last=False)
+    pref_train_loader = DataLoader(pref_set, batch_size=2, shuffle=True, drop_last=False)
     pref_net = PrefNet(x_duels[0][0].size).to(device) if model is None else model
     pref_net.double()
     # criterion = PrefLoss_Forrester()
@@ -25,7 +25,7 @@ def train_nn(x_duels, pref, model=None):
     optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
 
-    for epoch in range(50):
+    for epoch in range(20):
         pref_net.train()
         train_loss = 0
         # train with preference pairs
@@ -75,7 +75,7 @@ def compute_nn_acc(model, test):
         if pref == 0 and out1 > out2:
             acc += 1
     acc = acc / len(x_test)
-    print("nn", acc)
+
     return acc
 
 
@@ -86,7 +86,7 @@ def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
 
     acc = np.zeros(n_acq + 1, )
     acc[0] = compute_nn_acc(model, test)
-
+    print(0, acc[0])
     al_function = active_learning.choose_criterion(al_criterion)
 
     for i in range(n_acq):
@@ -102,7 +102,7 @@ def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
         model = train_nn(train['x_duels'], train['pref'], model)
 
         acc[i+1] = compute_nn_acc(model, test)
-
+        print(i + 1, acc[i + 1])
     return acc
 
 
@@ -134,7 +134,7 @@ def compute_gp_acc(model, test):
         if pref == 0 and out1 < out2:
             acc += 1
     acc = acc / len(x_test)
-    print("gp", acc)
+    # print("gp", acc)
     return acc
 
 
@@ -160,7 +160,7 @@ def active_train_gp(model, train0, query0, test, n_acq, al_criterion):
         model = train_gp(train['x_duels'], train['pref'], model)
 
         acc[i+1] = compute_gp_acc(model, test)
-
+        print(i + 1, acc[i + 1])
     return acc
 
 
