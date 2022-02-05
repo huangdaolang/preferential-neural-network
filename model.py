@@ -1,20 +1,23 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torchbnn as bnn
+import torch
 
 
 class PrefNet(nn.Module):
     def __init__(self, n_input):
         super(PrefNet, self).__init__()
-        self.fc1 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=n_input, out_features=50)
-        # self.fc2 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=10, out_features=10)
-        self.fc3 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=50, out_features=1)
+        self.fc1 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=n_input, out_features=100)
+        self.fc2 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=100, out_features=10)
+        self.fc3 = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=10, out_features=1)
 
     def forward_once(self, x):
         x = self.fc1(x)
-        x = F.relu(x)
-        # x = self.fc2(x)
-        # x = F.relu(x)
+        x = torch.tanh(x)
+
+        x = self.fc2(x)
+        x = torch.tanh(x)
+
         x = self.fc3(x)
 
         return x
@@ -41,6 +44,7 @@ class PrefNet_MC_dropout(nn.Module):
         x = self.fc2(x)
         x = F.relu(x)
         x = self.dropout(x)
+
         x = self.fc3(x)
 
         return x

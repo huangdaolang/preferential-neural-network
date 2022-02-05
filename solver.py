@@ -1,7 +1,5 @@
 from model import PrefNet
 from dataset import pref_dataset
-import random
-import numpy as np
 from utils import *
 import torch
 import torch.nn.functional as F
@@ -9,42 +7,49 @@ from torch.utils.data import DataLoader
 from GPro.preference import ProbitPreferenceGP
 import copy
 import active_learning
-import time
 import torchbnn as bnn
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def train_nn(x_duels, pref, model=None):
+    """
+    trainer for preferential neural network
+    :param x_duels: all the input pairs
+    :param pref: ground truth labels provided by expert
+    :param model: preferential neural network model
+    :return: updated model after training
+    """
     pref_set = pref_dataset(x_duels, pref)
     pref_train_loader = DataLoader(pref_set, batch_size=2, shuffle=True, drop_last=False)
     pref_net = PrefNet(x_duels[0][0].size).to(device) if model is None else model
     pref_net.double()
-    # criterion = PrefLoss_Forrester()
+
     criterion = torch.nn.NLLLoss()
     kl_loss = bnn.BKLLoss(reduction='mean', last_layer_only=False)
+
     optimizer = torch.optim.Adam(pref_net.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0.0001, T_max=20)
 
+    # train with preference pairs
     for epoch in range(20):
         pref_net.train()
         train_loss = 0
-        # train with preference pairs
+
         for idx, data in enumerate(pref_train_loader):
             x1 = data['x1']
             x2 = data['x2']
-            # pref = (torch.rand(size=[len(data['pref'])]) < data['pref']) * 1  # random process
-            # pref = data['pref'].double()
+
             pref = data['pref'].long()
             x1, x2, pref = x1.to(device), x2.to(device), pref.to(device)
             optimizer.zero_grad()
+
             output1, output2 = pref_net(x1, x2)
 
+            # here for binary classification, log_softmax on the two outputs equal to our paper's connection function
             output = F.log_softmax(torch.hstack((output1, output2)), dim=1)
 
-            # output = logistic_function(output1-output2).flatten()
             loss = criterion(output, pref) + 0.1 * kl_loss(pref_net)
-
-            # loss = criterion(output1, output2, pref)
             loss.backward()
 
             optimizer.step()
@@ -55,6 +60,12 @@ def train_nn(x_duels, pref, model=None):
 
 
 def compute_nn_acc(model, test):
+    """
+    compute the preference accuracy for neural network
+    :param model: current model
+    :param test: test set
+    :return: prediction accuracy
+    """
     model.eval()
     x_test = test['x_duels']
     pref_test = test['pref']
@@ -80,6 +91,16 @@ def compute_nn_acc(model, test):
 
 
 def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
+    """
+    active learning control function for nn
+    :param model: current model
+    :param train0: train set
+    :param query0: query set
+    :param test: test set
+    :param n_acq: active learning acquisition time
+    :param al_criterion: active learning criterion
+    :return: accuracy of preference prediction
+    """
     model = copy.deepcopy(model)
     train = train0.copy()
     query = query0.copy()
@@ -107,6 +128,13 @@ def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
 
 
 def train_gp(x_duels, pref, model=None):
+    """
+    gp-based solver
+    :param x_duels: all the input pairs
+    :param pref: ground truth labels provided by expert
+    :param model: current gp model
+    :return: updated gp model
+    """
     x_train = []
     M_train = []
     for i in range(len(x_duels)):
@@ -120,6 +148,12 @@ def train_gp(x_duels, pref, model=None):
 
 
 def compute_gp_acc(model, test):
+    """
+    compute the preference accuracy for gp-based model
+    :param model: current model
+    :param test: test set
+    :return: prediction accuracy
+    """
     x_test = test['x_duels']
     pref_test = test['pref']
     acc = 0
@@ -134,11 +168,20 @@ def compute_gp_acc(model, test):
         if pref == 0 and out1 < out2:
             acc += 1
     acc = acc / len(x_test)
-    # print("gp", acc)
     return acc
 
 
 def active_train_gp(model, train0, query0, test, n_acq, al_criterion):
+    """
+    active learning control function for gp
+    :param model: current model
+    :param train0: train set
+    :param query0: query set
+    :param test: test set
+    :param n_acq: active learning acquisition time
+    :param al_criterion: active learning criterion
+    :return: accuracy of preference prediction
+    """
     train = train0.copy()
     query = query0.copy()
     model = copy.deepcopy(model)

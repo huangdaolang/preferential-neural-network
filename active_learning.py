@@ -29,21 +29,7 @@ def random_sampling(model, train, query, test):
 def nn_least_confident(model, train, query, test):
     model.eval()
     x_query = query['x_duels']
-    # confidence = torch.zeros(len(query['pref']))
-    #
-    # for i in range(len(x_query)):
-    #     x1 = torch.tensor(x_query[i][0])
-    #     x2 = torch.tensor(x_query[i][1])
-    #     out = torch.zeros((n_mc, 2))
-    #     for n in range(n_mc):
-    #         out[n, 0], out[n, 1] = model(x1, x2)
-    #     pred = torch.mean(out, dim=0)
-    #     out1 = pred[0]
-    #     out2 = pred[1]
-    #     # out1, out2 = model(x1, x2)
-    #     diff = torch.abs(out1 - out2)
-    #     v = logistic_function(diff)
-    #     confidence[i] = v
+
     n_mc = 5
     confidence = torch.zeros((n_mc, len(query['pref'])))
     x1 = torch.tensor(x_query[:, 0, :])

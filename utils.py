@@ -66,6 +66,15 @@ def forrester_function(x):
     return (6*x-2)**2 * np.sin(12*x-4)
 
 
+def get_forrester_data():
+    x = np.linspace(0, 1, 100).reshape(-1, 1)
+    y = forrester_function(x)
+    pairs = list(itertools.permutations(range(len(x)), 2))
+    random.seed(config.seed)
+    random.shuffle(pairs)
+    return x, y, pairs
+
+
 def branin_function(x1, x2):
     a = 1
     b = 5.1 / (4*(np.pi**2))
@@ -136,21 +145,12 @@ def ackley_function(x):
 
 def get_ackley_data():
     rng = default_rng()
-    x = rng.uniform(low=-32.768, high=32.768, size=(1000, 20))
+    x = rng.uniform(low=-10, high=10, size=(1000, 20))
     y = ackley_function(x)
     pairs = list(itertools.combinations(range(len(y)), 2))
     random.seed(config.seed)
     random.shuffle(pairs)
     print(min(y))
-    return x, y, pairs
-
-
-def get_forrester_data():
-    x = np.linspace(0, 1, 100).reshape(-1, 1)
-    y = forrester_function(x)
-    pairs = list(itertools.permutations(range(len(x)), 2))
-    random.seed(config.seed)
-    random.shuffle(pairs)
     return x, y, pairs
 
 
