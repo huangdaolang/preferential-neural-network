@@ -8,6 +8,7 @@ from GPro.preference import ProbitPreferenceGP
 import copy
 import active_learning
 import torchbnn as bnn
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -109,8 +110,9 @@ def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
     acc[0] = compute_nn_acc(model, test)
     print(0, acc[0])
     al_function = active_learning.choose_criterion(al_criterion)
-
+    t = np.zeros(n_acq, )
     for i in range(n_acq):
+        t1 = time.time()
         query_index = al_function(model, train, query, test)
         pref_q = query['pref'][query_index]
 
@@ -121,10 +123,12 @@ def active_train_nn(model, train0, query0, test, n_acq, al_criterion):
         query['pref'] = np.delete(query['pref'], query_index)
 
         model = train_nn(train['x_duels'], train['pref'], model)
-
+        t2 = time.time()
+        t[i] = str(t2-t1)
         acc[i+1] = compute_nn_acc(model, test)
         print(i + 1, acc[i + 1])
-    return acc
+
+    return acc, t
 
 
 def train_gp(x_duels, pref, model=None):
@@ -189,8 +193,9 @@ def active_train_gp(model, train0, query0, test, n_acq, al_criterion):
     acc[0] = compute_gp_acc(model, test)
 
     al_function = active_learning.choose_criterion(al_criterion)
-
+    t = np.zeros(n_acq, )
     for i in range(n_acq):
+        t1 = time.time()
         query_index = al_function(model, train, query, test)
         pref_q = query['pref'][query_index]
 
@@ -201,10 +206,12 @@ def active_train_gp(model, train0, query0, test, n_acq, al_criterion):
         query['pref'] = np.delete(query['pref'], query_index)
 
         model = train_gp(train['x_duels'], train['pref'], model)
-
+        t2 = time.time()
+        t[i] = str(t2 - t1)
         acc[i+1] = compute_gp_acc(model, test)
         print(i + 1, acc[i + 1])
-    return acc
+
+    return acc, t
 
 
 

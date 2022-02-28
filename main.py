@@ -15,7 +15,7 @@ def main(train_pair, query_pair, test_pair, n_acq, index):
     :param n_acq: active learning acquisition time
     :param index: record simulation index
     """
-    root_name = 'Sim/' + config.dataset
+    root_name = 'Time/' + config.dataset
     if not os.path.exists(root_name):
         os.mkdir(root_name)
 
@@ -27,10 +27,10 @@ def main(train_pair, query_pair, test_pair, n_acq, index):
     model = solver.train_nn(train['x_duels'], train['pref'], model=None)
     acc_nn[0, :] = solver.active_train_nn(model, train, query, test, n_acq, "random")
     acc_nn[1, :] = solver.active_train_nn(model, train, query, test, n_acq, "nn_lc")
-    acc_nn[2, :] = solver.active_train_nn(model, train, query, test, n_acq, "nn_bald")
+    acc_nn[2, :], time_nn = solver.active_train_nn(model, train, query, test, n_acq, "nn_bald")
 
     print('Saving results for nn...')
-    np.save(root_name + '/nn_' + str(index) + '.npy', acc_nn)
+    np.save(root_name + '/nn_' + str(index) + '.npy', time_nn)
     print(acc_nn)
 
     # gp part for three different active learning strategies
@@ -38,11 +38,11 @@ def main(train_pair, query_pair, test_pair, n_acq, index):
     gp_model = solver.train_gp(train['x_duels'], train['pref'], model=None)
     acc_gp[0, :] = solver.active_train_gp(gp_model, train, query, test, n_acq, "random")
     acc_gp[1, :] = solver.active_train_gp(gp_model, train, query, test, n_acq, "gp_lc")
-    acc_gp[2, :] = solver.active_train_gp(gp_model, train, query, test, n_acq, "gp_bald")
+    acc_gp[2, :], time_gp = solver.active_train_gp(gp_model, train, query, test, n_acq, "gp_bald")
 
     print('Saving results for gp...')
-    np.save(root_name + '/gp_' + str(index) + '.npy', acc_gp)
-    print(acc_gp)
+    np.save(root_name + '/gp_' + str(index) + '.npy', time_gp)
+    # print(acc_gp)
 
 
 if __name__ == "__main__":
